@@ -17,6 +17,7 @@ import org.slf4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
@@ -29,25 +30,33 @@ public class CleanShot {
     public static final String MODID = "njw_clean_shot";
     public static final Logger LOGGER = LogUtils.getLogger();
 
+    private static final DateTimeFormatter DATE_FORMAT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
     private static final DateTimeFormatter SCREENSHOT_TIME_FORMAT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd_HH.mm.ss");
 
     public CleanShot(IEventBus modEventBus, ModContainer modContainer) {
 
-        // Client config 등록
+        // ------------------------------------------------------------
+        // Client config
+        // ------------------------------------------------------------
+
         modContainer.registerConfig(
                 ModConfig.Type.CLIENT,
                 CleanShotConfig.SPEC
         );
 
-        // Mods -> CleanShot -> Config 화면 등록
+        // Mods -> CleanShot -> Config
         modContainer.registerExtensionPoint(
                 IConfigScreenFactory.class,
-                (container, parent) ->
-                        new ConfigurationScreen(container, parent)
+                ConfigurationScreen::new
         );
 
-        // Screenshot event
+        // ------------------------------------------------------------
+        // Events
+        // ------------------------------------------------------------
+
         NeoForge.EVENT_BUS.addListener(this::onScreenshot);
 
         LOGGER.info("CleanShot initialized.");
@@ -56,10 +65,22 @@ public class CleanShot {
     private void onScreenshot(ScreenshotEvent event) {
         Minecraft minecraft = Minecraft.getInstance();
 
-        // 월드 밖에서는 vanilla screenshot 동작 유지
+        // 월드 밖에서는 vanilla screenshot 동작을 그대로 사용한다.
         if (minecraft.player == null || minecraft.level == null) {
             return;
         }
+
+        // ------------------------------------------------------------
+        // 촬영 시각
+        //
+        // 날짜와 파일명의 시간이 자정 경계에서 서로 달라지는 것을
+        // 방지하기 위해 LocalDateTime을 한 번만 얻는다.
+        // ------------------------------------------------------------
+
+        LocalDateTime now = LocalDateTime.now();
+
+        String date = now.format(DATE_FORMAT);
+        String timestamp = now.format(SCREENSHOT_TIME_FORMAT);
 
         // ------------------------------------------------------------
         // 플레이어 정보
@@ -77,21 +98,60 @@ public class CleanShot {
         String dimension =
                 minecraft.level.dimension().identifier().toString();
 
+        // ------------------------------------------------------------
+        // Screenshot root
+        // ------------------------------------------------------------
+
         File originalFile = event.getScreenshotFile();
-        File screenshotDirectory = originalFile.getParentFile();
+
+        File screenshotRootDirectory =
+                originalFile.getParentFile();
+
+        // ------------------------------------------------------------
+        // 실제 저장 폴더 결정
+        // ------------------------------------------------------------
+
+        File screenshotDirectory;
+
+        if (CleanShotConfig.ORGANIZE_BY_DATE.get()) {
+            screenshotDirectory =
+                    new File(screenshotRootDirectory, date);
+        } else {
+            screenshotDirectory =
+                    screenshotRootDirectory;
+        }
+
+        try {
+            Files.createDirectories(
+                    screenshotDirectory.toPath()
+            );
+        } catch (IOException e) {
+            event.setCanceled(true);
+
+            event.setResultMessage(
+                    Component.translatable(
+                            "message.njw_clean_shot.screenshot.failed"
+                    )
+            );
+
+            LOGGER.error(
+                    "Failed to create screenshot directory: {}",
+                    screenshotDirectory,
+                    e
+            );
+
+            return;
+        }
 
         // ------------------------------------------------------------
         // 파일명 결정
         // ------------------------------------------------------------
 
-        File newFile;
+        String fileName;
 
         if (CleanShotConfig.COORDINATE_FILENAME.get()) {
 
-            String timestamp =
-                    LocalDateTime.now().format(SCREENSHOT_TIME_FORMAT);
-
-            String fileName = String.format(
+            fileName = String.format(
                     Locale.ROOT,
                     "%s_[%d,%d,%d].png",
                     timestamp,
@@ -100,21 +160,24 @@ public class CleanShot {
                     blockPos.getZ()
             );
 
-            newFile = getUniqueFile(
-                    screenshotDirectory,
-                    fileName
-            );
-
         } else {
-            // 옵션 OFF면 vanilla가 원래 사용하려던 파일명 그대로 사용
-            newFile = originalFile;
+
+            // 좌표 파일명 옵션이 OFF인 경우
+            // vanilla가 생성한 원래 파일명을 사용한다.
+            fileName = originalFile.getName();
         }
+
+        File newFile = getUniqueFile(
+                screenshotDirectory,
+                fileName
+        );
 
         // ------------------------------------------------------------
         // PNG metadata
         // ------------------------------------------------------------
 
-        Map<String, String> metadata = new LinkedHashMap<>();
+        Map<String, String> metadata =
+                new LinkedHashMap<>();
 
         metadata.put(
                 "CleanShot.Position",
@@ -155,13 +218,24 @@ public class CleanShot {
         // ------------------------------------------------------------
 
         try {
+            /*
+             * ScreenshotEvent가 vanilla 저장 전에 발생하므로
+             * CleanShot에서 직접 PNG를 저장한다.
+             */
             event.getImage().writeToFile(newFile);
 
+            /*
+             * 저장된 PNG에 CleanShot metadata 추가
+             */
             PngMetadataWriter.addMetadata(
                     newFile,
                     metadata
             );
 
+            /*
+             * CleanShot에서 이미 저장했으므로
+             * vanilla 저장은 취소한다.
+             */
             event.setScreenshotFile(newFile);
             event.setCanceled(true);
 
@@ -178,7 +252,7 @@ public class CleanShot {
 
             LOGGER.info(
                     "Saved screenshot: {}",
-                    newFile.getName()
+                    newFile
             );
 
             LOGGER.info(
@@ -207,10 +281,28 @@ public class CleanShot {
 
             if (CleanShotConfig.CREATE_CSV_LOG.get()) {
 
+                /*
+                 * CSV는 날짜별 폴더 안이 아니라
+                 * 항상 screenshots 루트에 하나만 유지한다.
+                 *
+                 * CSV의 File 필드에는 screenshots 폴더 기준
+                 * 상대 경로를 기록한다.
+                 */
+
+                String csvFilePath;
+
+                if (CleanShotConfig.ORGANIZE_BY_DATE.get()) {
+                    csvFilePath =
+                            date + "/" + newFile.getName();
+                } else {
+                    csvFilePath =
+                            newFile.getName();
+                }
+
                 try {
                     CsvLogWriter.append(
-                            screenshotDirectory.toPath(),
-                            newFile.getName(),
+                            screenshotRootDirectory.toPath(),
+                            csvFilePath,
                             x,
                             y,
                             z,
@@ -224,6 +316,12 @@ public class CleanShot {
                     );
 
                 } catch (IOException e) {
+
+                    /*
+                     * PNG는 이미 정상 저장되었으므로
+                     * CSV 실패 때문에 screenshot 자체를
+                     * 실패 처리하지 않는다.
+                     */
                     LOGGER.warn(
                             "Screenshot was saved, but failed to update cleanshot.csv.",
                             e
@@ -251,14 +349,26 @@ public class CleanShot {
             File directory,
             String fileName
     ) {
-        File file = new File(directory, fileName);
+        File file = new File(
+                directory,
+                fileName
+        );
 
         if (!file.exists()) {
             return file;
         }
 
-        String baseName =
-                fileName.substring(0, fileName.length() - 4);
+        String baseName;
+
+        if (fileName.toLowerCase(Locale.ROOT).endsWith(".png")) {
+            baseName =
+                    fileName.substring(
+                            0,
+                            fileName.length() - 4
+                    );
+        } else {
+            baseName = fileName;
+        }
 
         int index = 2;
 

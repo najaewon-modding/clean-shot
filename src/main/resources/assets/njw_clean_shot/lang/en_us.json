@@ -2,6 +2,7 @@
   "njw_clean_shot.configuration.title": "CleanShot Configuration",
   "njw_clean_shot.configuration.coordinateFilename": "Coordinates in File Name",
   "njw_clean_shot.configuration.createCsvLog": "Create CSV Log",
+  "njw_clean_shot.configuration.organizeByDate": "Organize Screenshots by Date",
 
   "message.njw_clean_shot.screenshot.saved": "Saved screenshot as %s",
   "message.njw_clean_shot.screenshot.failed": "Failed to save CleanShot screenshot."
