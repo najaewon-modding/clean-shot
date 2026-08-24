@@ -1,0 +1,8 @@
+{
+  "njw_clean_shot.configuration.title": "CleanShot 설정",
+  "njw_clean_shot.configuration.coordinateFilename": "파일 이름에 좌표 포함",
+  "njw_clean_shot.configuration.createCsvLog": "CSV 로그 생성",
+
+  "message.njw_clean_shot.screenshot.saved": "스크린샷을 %s(으)로 저장했습니다.",
+  "message.njw_clean_shot.screenshot.failed": "CleanShot 스크린샷을 저장하지 못했습니다."
+}
