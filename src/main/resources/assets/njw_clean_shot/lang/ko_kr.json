@@ -3,6 +3,7 @@
   "njw_clean_shot.configuration.coordinateFilename": "파일 이름에 좌표 포함",
   "njw_clean_shot.configuration.createCsvLog": "CSV 로그 생성",
   "njw_clean_shot.configuration.organizeByDate": "날짜별로 스크린샷 정리",
+  "njw_clean_shot.configuration.hideChatInScreenshot": "스크린샷에서 채팅 숨기기",
 
   "message.njw_clean_shot.screenshot.saved": "스크린샷 저장: %s",
   "message.njw_clean_shot.screenshot.failed": "CleanShot 스크린샷 저장에 실패했습니다."
