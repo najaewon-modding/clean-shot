@@ -38,14 +38,14 @@ config="${mod_id}.mixins.json"
     type="required" #mandatory
     versionRange="[${neo_version},)" #mandatory
     ordering="NONE"
-    side="BOTH"
+    side="CLIENT"
 
 [[dependencies.${mod_id}]]
     modId="minecraft"
     type="required"
     versionRange="${minecraft_version_range}"
     ordering="NONE"
-    side="BOTH"
+    side="CLIENT"
 
 #[features.${mod_id}]
 #openGLVersion="[3.2,)"
