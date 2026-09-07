@@ -256,3 +256,7 @@ File,X,Y,Z,Dimension,Yaw,Pitch
 * 인게임 설정 화면
 * 영어 및 한국어 지원
 * 클라이언트 전용 동작
+
+## License
+
+MIT
